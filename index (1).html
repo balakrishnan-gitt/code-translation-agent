@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code Translation Agent: JavaScript to Python</title>
+<meta name="description" content="An agent that reads a local JavaScript file and rewrites it in Python, keeping the same variable names.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f6; --ink:#17283a; --muted:#52657a; --line:#c9d4df; --panel:#ffffff;
+  --js:#f6e27a; --js-ink:#5a4a00; --py:#3776ab; --py-soft:#d6e6f5; --focus:#0b57d0;
+  --font:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#121c28;--ink:#e6edf5;--muted:#9db0c4;--line:#2b3b4d;--panel:#192636;--js:#6b5d12;--js-ink:#fbeea0;--py:#7fb2e5;--py-soft:#223a54;--focus:#8ab4f8}
+}
+:root[data-theme="dark"]{--bg:#121c28;--ink:#e6edf5;--muted:#9db0c4;--line:#2b3b4d;--panel:#192636;--js:#6b5d12;--js-ink:#fbeea0;--py:#7fb2e5;--py-soft:#223a54;--focus:#8ab4f8}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1.0625rem/1.6 var(--font)}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.wrap{max-width:68rem;margin:0 auto;padding:0 1.25rem}
+header.top{display:flex;justify-content:space-between;align-items:center;padding:1rem 0;gap:1rem;flex-wrap:wrap}
+header.top strong{font-weight:800}
+header.top nav{display:flex;gap:1.25rem}
+header.top nav a{text-decoration:none;color:var(--muted)}
+header.top nav a:hover{color:var(--ink);text-decoration:underline}
+h1{font-size:clamp(2.2rem,6vw,4.2rem);line-height:1.05;font-weight:800;letter-spacing:-.02em;margin:1.5rem 0 1rem;max-width:18ch}
+h2{font-size:clamp(1.5rem,3.5vw,2.1rem);line-height:1.15;font-weight:800;letter-spacing:-.01em;margin:0 0 .75rem}
+p{max-width:62ch;margin:0 0 1rem}
+.lede{font-size:1.2rem;color:var(--muted)}
+.btns{display:flex;gap:.75rem;flex-wrap:wrap;margin:1.5rem 0 2.5rem}
+.btn{display:inline-block;padding:.7rem 1.2rem;border-radius:.5rem;font-weight:600;text-decoration:none;border:2px solid var(--ink)}
+.btn.primary{background:var(--ink);color:var(--bg)}
+.btn:hover{transform:translateY(-1px)}
+/* translation panel */
+.diff{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:.75rem;overflow:hidden;background:var(--panel)}
+.pane{min-width:0}
+.pane h3{margin:0;padding:.6rem 1rem;font:600 .9rem var(--font)}
+.pane.js h3{background:var(--js);color:var(--js-ink)}
+.pane.py h3{background:var(--py-soft);color:var(--py)}
+pre{margin:0;padding:1rem;overflow-x:auto;font:400 .9rem/1.65 var(--mono);tab-size:4}
+.pane.py{border-left:1px solid var(--line)}
+.id{border-radius:.25rem;padding:0 .1em;cursor:pointer;transition:background .15s}
+.id.on{background:var(--py);color:#fff}
+.hint{color:var(--muted);font-size:.9rem;margin:.6rem 0 0}
+section{padding:3.5rem 0 0}
+.steps{list-style:none;padding:0;margin:1.25rem 0 0;display:grid;gap:0;counter-reset:s;border-left:3px solid var(--py)}
+.steps li{counter-increment:s;padding:0 0 1.4rem 1.4rem;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:-1.05rem;top:0;width:1.6rem;height:1.6rem;border-radius:50%;background:var(--py);color:#fff;display:grid;place-items:center;font:600 .85rem var(--font)}
+.steps b{display:block;font-weight:600}
+.steps span{color:var(--muted)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:.75rem;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:34rem}
+th,td{text-align:left;padding:.7rem 1rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;background:var(--py-soft)}
+tr:last-child td{border-bottom:0}
+code{font-family:var(--mono);font-size:.92em}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:.75rem;padding:1.25rem}
+.box h3{margin:0 0 .5rem;font-size:1.1rem}
+.box ul{margin:0;padding-left:1.1rem}
+footer{margin-top:4rem;border-top:1px solid var(--line);padding:1.5rem 0 3rem;color:var(--muted);font-size:.95rem}
+@media (max-width:720px){.diff,.cols{grid-template-columns:1fr}.pane.py{border-left:0;border-top:1px solid var(--line)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}.btn:hover{transform:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <strong>Code Translation Agent</strong>
+    <nav aria-label="Page sections">
+      <a href="#how">How it works</a>
+      <a href="#names">Naming rule</a>
+      <a href="#run">Run it</a>
+      <a href="#team">Team</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Turn a JavaScript file into Python without renaming anything.</h1>
+    <p class="lede">The agent reads a local <code>.js</code> file, rewrites its logic in Python, and keeps every variable and function name exactly as you wrote it.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/YOUR-USERNAME/YOUR-REPO">View on GitHub</a>
+      <a class="btn" href="#run">Run it locally</a>
+    </div>
+
+    <div class="diff" id="diff" aria-label="JavaScript input and Python output">
+      <div class="pane js">
+        <h3>input.js</h3>
+<pre>const <span class="id" data-id="taxRate">taxRate</span> = 0.18;
+
+function <span class="id" data-id="calcTotal">calcTotal</span>(<span class="id" data-id="cartItems">cartItems</span>) {
+  let <span class="id" data-id="totalPrice">totalPrice</span> = 0;
+  for (const <span class="id" data-id="item">item</span> of <span class="id" data-id="cartItems">cartItems</span>) {
+    <span class="id" data-id="totalPrice">totalPrice</span> += <span class="id" data-id="item">item</span>.price * <span class="id" data-id="item">item</span>.qty;
+  }
+  return <span class="id" data-id="totalPrice">totalPrice</span> * (1 + <span class="id" data-id="taxRate">taxRate</span>);
+}</pre>
+      </div>
+      <div class="pane py">
+        <h3>output.py</h3>
+<pre><span class="id" data-id="taxRate">taxRate</span> = 0.18
+
+def <span class="id" data-id="calcTotal">calcTotal</span>(<span class="id" data-id="cartItems">cartItems</span>):
+    <span class="id" data-id="totalPrice">totalPrice</span> = 0
+    for <span class="id" data-id="item">item</span> in <span class="id" data-id="cartItems">cartItems</span>:
+        <span class="id" data-id="totalPrice">totalPrice</span> += <span class="id" data-id="item">item</span>["price"] * <span class="id" data-id="item">item</span>["qty"]
+    return <span class="id" data-id="totalPrice">totalPrice</span> * (1 + <span class="id" data-id="taxRate">taxRate</span>)</pre>
+      </div>
+    </div>
+    <p class="hint">Hover or tap a name to see it matched on both sides. Python style would use <code>total_price</code>; this agent keeps <code>totalPrice</code>.</p>
+
+    <section id="how">
+      <h2>How the agent works</h2>
+      <p>The agent runs a short loop and only stops when the Python file passes its checks.</p>
+      <ol class="steps">
+        <li><b>Read the file</b><span>A <code>read_file</code> tool loads the JavaScript from the path you pass in.</span></li>
+        <li><b>List the names</b><span>It extracts every variable, function and parameter name, so there is a fixed list to protect.</span></li>
+        <li><b>Translate</b><span>A rule-based translator rewrites each construct (functions, loops, if/else, objects, classes) as Python, leaving every name untouched.</span></li>
+        <li><b>Verify</b><span>Python's <code>ast</code> module parses the output, then the agent compares its names against the list from step 2.</span></li>
+        <li><b>Repair or save</b><span>On a syntax error, the agent uses the error line to fix or flag that line, then checks again. On success, it writes <code>output.py</code>.</span></li>
+      </ol>
+    </section>
+
+    <section id="names">
+      <h2>The naming rule</h2>
+      <p>Names stay the same. Syntax changes where Python requires it.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>JavaScript</th><th>Python output</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td><code>userName</code></td><td><code>userName</code></td><td>camelCase is kept, not converted to snake_case</td></tr>
+            <tr><td><code>const MAX_SIZE = 10</code></td><td><code>MAX_SIZE = 10</code></td><td><code>const</code> and <code>let</code> are dropped, the name stays</td></tr>
+            <tr><td><code>arr.push(x)</code></td><td><code>arr.append(x)</code></td><td>Methods change, variable <code>arr</code> stays</td></tr>
+            <tr><td><code>class</code>, <code>new</code></td><td><code>class</code>, no <code>new</code></td><td>Constructors become plain calls</td></tr>
+            <tr><td>A name that is a Python keyword, such as <code>from</code> or <code>lambda</code></td><td><code>from_</code>, <code>lambda_</code></td><td>The only allowed rename, reported in the log</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="run">
+      <h2>Run it</h2>
+      <div class="box">
+<pre style="padding:0">git clone https://github.com/YOUR-USERNAME/YOUR-REPO
+cd YOUR-REPO
+python agent.py path/to/input.js</pre>
+      <p class="hint" style="margin-top:.75rem">Needs Python 3.8 or newer. No API key and no extra packages.</p>
+      </div>
+      <div class="cols" style="margin-top:1.5rem">
+        <div class="box">
+          <h3>What it handles</h3>
+          <ul>
+            <li>Functions, loops, conditionals</li>
+            <li>Arrays and objects, as lists and dicts</li>
+            <li>Classes, template strings, ternaries, try/catch</li>
+          </ul>
+        </div>
+        <div class="box">
+          <h3>Known limits</h3>
+          <ul>
+            <li>Async code and the DOM have no direct Python match</li>
+            <li>Lines it cannot translate (such as <code>switch</code>) are marked TODO</li>
+            <li>Output is checked for syntax and names, not for behavior</li>
+            <li>Review the result before you rely on it</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="team">
+      <h2>Course project</h2>
+      <p>Agentic AI course, Sathyabama University. Submitted by Balakrishnan G (44110099) and Balamurugan (44110100).</p>
+    </section>
+  </main>
+
+  <footer>Code Translation Agent. Source code on <a href="https://github.com/YOUR-USERNAME/YOUR-REPO">GitHub</a>.</footer>
+</div>
+
+<script>
+(function(){
+  var ids = document.querySelectorAll('.id');
+  function set(name,on){
+    ids.forEach(function(el){ if(el.dataset.id===name) el.classList.toggle('on',on); });
+  }
+  ids.forEach(function(el){
+    el.setAttribute('tabindex','0');
+    el.addEventListener('mouseenter',function(){set(el.dataset.id,true)});
+    el.addEventListener('mouseleave',function(){set(el.dataset.id,false)});
+    el.addEventListener('focus',function(){set(el.dataset.id,true)});
+    el.addEventListener('blur',function(){set(el.dataset.id,false)});
+  });
+})();
+</script>
+</body>
+</html>
