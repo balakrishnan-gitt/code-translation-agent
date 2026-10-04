@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code Translation Agent: JavaScript to Python</title>
+<meta name="description" content="An agent that reads a local JavaScript file and rewrites it in Python, keeping the same variable names.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f8f9fb;--panel:#fff;--ink:#162033;--muted:#5b6578;--line:#e1e5ec;--accent:#2f5bd8;--onaccent:#fff;
+--js:#fbf1c7;--jsink:#6b5600;--py:#e3ebfb;--pyink:#2347a8;--ok-bg:#dcf3e6;--ok-ink:#14532d;--bad-bg:#fde2e2;--bad-ink:#7f1d1d;
+--font:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1520;--panel:#161e2c;--ink:#e8edf5;--muted:#98a4b8;--line:#26324a;--accent:#7aa2ff;--onaccent:#0f1520;
+--js:#4a3f14;--jsink:#f3e3a0;--py:#1e2d52;--pyink:#a9c1ff;--ok-bg:#16402a;--ok-ink:#b7ebcc;--bad-bg:#4a1d1d;--bad-ink:#fbc4c4}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1.0625rem/1.65 var(--font)}
+a{color:inherit}:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:66rem;margin:0 auto;padding:0 1.25rem}
+.top{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;padding:1.1rem 0;border-bottom:1px solid var(--line)}
+.top strong{font-weight:800;letter-spacing:-.01em}.top nav{display:flex;gap:1.3rem;flex-wrap:wrap}
+.top nav a{text-decoration:none;color:var(--muted);font-size:.95rem}.top nav a:hover{color:var(--ink);text-decoration:underline}
+h1{font-size:clamp(2.3rem,6.2vw,4.3rem);line-height:1.04;font-weight:800;letter-spacing:-.025em;margin:3.5rem 0 1.1rem;max-width:15ch}
+h2{font-size:clamp(1.5rem,3.4vw,2.1rem);line-height:1.15;font-weight:800;letter-spacing:-.015em;margin:0 0 .5rem}
+p{max-width:60ch;margin:0 0 1rem}.lede{font-size:1.2rem;color:var(--muted);max-width:44ch}
+.sub{color:var(--muted);margin-bottom:1.5rem}
+.btns{display:flex;gap:.7rem;flex-wrap:wrap;margin:1.6rem 0 3rem}
+.btn{display:inline-block;padding:.65rem 1.15rem;border-radius:.6rem;font-weight:600;text-decoration:none;border:1.5px solid var(--ink);color:var(--ink)}
+.btn.primary{background:var(--ink);color:var(--bg)}.btn:hover{transform:translateY(-1px)}
+section{padding:4.5rem 0 0}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:3rem 0 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.facts div{padding:1.1rem 1rem 1.1rem 0}.facts b{display:block;font-weight:800;font-size:1.05rem}.facts span{color:var(--muted);font-size:.95rem}
+.toolbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:0 0 .75rem}
+.toolbar select{font:inherit;padding:.45rem .6rem;border:1.5px solid var(--line);border-radius:.55rem;background:var(--panel);color:var(--ink)}
+.small{padding:.45rem .9rem;font-size:.95rem;background:transparent;cursor:pointer;font-family:var(--font);border-color:var(--line)}
+.diff{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:.9rem;overflow:hidden;background:var(--panel);box-shadow:0 18px 40px -28px rgba(20,32,60,.35)}
+.pane{min-width:0}.pane.py{border-left:1px solid var(--line)}
+.pane h3{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin:0;padding:.6rem 1rem;font:600 .9rem var(--font)}
+.pane.js h3{background:var(--js);color:var(--jsink)}.pane.py h3{background:var(--py);color:var(--pyink)}
+.acts{display:flex;gap:.4rem}.acts button{font:600 .8rem var(--font);padding:.2rem .6rem;border:1.5px solid currentColor;border-radius:.4rem;background:transparent;color:inherit;cursor:pointer}
+textarea#src{display:block;width:100%;min-height:19rem;border:0;resize:vertical;padding:1rem;background:var(--panel);color:var(--ink);font:400 .9rem/1.65 var(--mono);tab-size:4}
+pre{margin:0;padding:1rem;overflow-x:auto;font:400 .9rem/1.65 var(--mono)}pre#out{min-height:19rem}
+.empty{color:var(--muted);font-family:var(--font)}
+.id{border-radius:.25rem;padding:0 .1em;transition:background .15s}.id.on,.chip.on{background:var(--accent);color:var(--onaccent)}
+.agent{margin-top:1rem;display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}.agent h3{margin:0 0 .5rem;font-size:1rem}
+.log,.chips{list-style:none;margin:0;padding:0}.log li{padding:.1rem 0;font-size:.95rem}
+.log .bad{color:var(--bad-ink);background:var(--bad-bg);border-radius:.3rem;padding:.15rem .4rem;margin:.15rem 0}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem}
+.chip{font:400 .85rem var(--mono);padding:.15rem .55rem;border-radius:999px;background:var(--ok-bg);color:var(--ok-ink)}.chip.miss{background:var(--bad-bg);color:var(--bad-ink)}
+.hint{color:var(--muted);font-size:.9rem;margin:.8rem 0 0}
+.flow{overflow-x:auto;border:1px solid var(--line);border-radius:.9rem;background:var(--panel);padding:1rem}
+.flow svg{display:block;min-width:600px;width:100%;height:auto}
+.flow .b{fill:var(--bg);stroke:var(--line);stroke-width:1.5}.flow .v{fill:var(--py);stroke:var(--accent);stroke-width:1.5}
+.flow text{fill:var(--ink);font:600 14px var(--font);text-anchor:middle}.flow .s{font:400 12px var(--font);fill:var(--muted)}
+.flow path{fill:none;stroke:var(--muted);stroke-width:1.5}.flow .ah{fill:var(--muted);stroke:none}
+.steps{margin:1.4rem 0 0;padding-left:1.2rem;max-width:62ch}.steps li{margin-bottom:.5rem}.steps b{font-weight:600}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:.9rem;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:34rem}th,td{text-align:left;padding:.65rem 1rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.9rem}tr:last-child td{border-bottom:0}code{font-family:var(--mono);font-size:.9em}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:.9rem;padding:1.2rem 1.3rem}.box h3{margin:0 0 .5rem;font-size:1.05rem}.box ul{margin:0;padding-left:1.1rem}.box li{margin-bottom:.3rem}
+.box pre{padding:0}
+footer{margin:5rem 0 0;border-top:1px solid var(--line);padding:1.5rem 0 3rem;color:var(--muted);font-size:.95rem}
+@media (max-width:720px){.diff,.cols,.agent{grid-template-columns:1fr}.pane.py{border-left:0;border-top:1px solid var(--line)}.facts{grid-template-columns:1fr 1fr}h1{margin-top:2.2rem}section{padding-top:3.5rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}.btn:hover{transform:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <strong>Code Translation Agent</strong>
+    <nav aria-label="Page sections"><a href="#demo">Try it</a><a href="#design">Design</a><a href="#rules">Rules</a><a href="#testing">Testing</a><a href="#run">Run</a><a href="#team">Team</a></nav>
+  </header>
+  <main>
+    <h1>JavaScript in, Python out. Every name kept.</h1>
+    <p class="lede">An agent that reads a local JavaScript file and rewrites it in Python without renaming a single variable.</p>
+    <div class="btns"><a class="btn primary" href="https://github.com/YOUR-USERNAME/YOUR-REPO">View on GitHub</a><a class="btn" href="#demo">Try it live</a></div>
+    <section id="demo" style="padding-top:0">
+<div class="toolbar" role="group" aria-label="Example and file controls">
+      <label>Example: <select id="example">
+        <option value="0">Cart total</option>
+        <option value="1">Bank account class</option>
+        <option value="2">FizzBuzz loop</option>
+      </select></label>
+      <label class="btn small" tabindex="0" id="filebtn">Open a .js file<input type="file" id="file" accept=".js,.mjs,.txt" hidden></label>
+      <button class="btn small" id="clear" type="button">Clear</button>
+    </div>
+    <div class="diff" id="diff">
+      <div class="pane js">
+        <h3><label for="src">input.js (edit it)</label></h3>
+        <textarea id="src" spellcheck="false" autocomplete="off"></textarea>
+      </div>
+      <div class="pane py">
+        <h3><span>output.py</span><span class="acts"><button type="button" id="copy">Copy</button><button type="button" id="dl">Download</button></span></h3>
+        <pre id="out" aria-live="polite"></pre>
+      </div>
+    </div>
+    <div class="agent">
+      <div><h3>Agent log</h3><ol class="log" id="log" aria-live="polite"></ol></div>
+      <div><h3>Names kept</h3><ul class="chips" id="chips"></ul></div>
+    </div>
+    <p class="hint">Runs in your browser, nothing is uploaded. Hover a name to see it matched. This page checks names and brackets; <code>agent.py</code> also does the full Python syntax check.</p>
+      <div class="facts">
+        <div><b>No API key</b><span>Runs fully offline</span></div>
+        <div><b>No packages</b><span>Python 3.8+ only</span></div>
+        <div><b>Two versions</b><span>Command line and browser</span></div>
+        <div><b>Same output</b><span>Matched on 5 test files</span></div>
+      </div>
+    </section>
+
+    <section id="design">
+      <h2>How the agent works</h2>
+      <p class="sub">A loop, not a one-shot script: it checks its own work and repairs it.</p>
+      <div class="flow"><svg viewBox="0 0 760 170" role="img" aria-label="Agent loop: read file, extract names, translate, verify, save. A failed verify sends the output to repair, then back to verify.">
+        <g class="b"><rect x="8" y="30" width="124" height="54" rx="10"/><rect x="164" y="30" width="124" height="54" rx="10"/><rect x="320" y="30" width="124" height="54" rx="10"/><rect class="v" x="476" y="30" width="124" height="54" rx="10"/><rect x="632" y="30" width="120" height="54" rx="10"/></g>
+        <text x="70" y="55">Read file</text><text class="s" x="70" y="73">input.js</text>
+        <text x="226" y="55">Extract names</text><text class="s" x="226" y="73">protect list</text>
+        <text x="382" y="55">Translate</text><text class="s" x="382" y="73">rules</text>
+        <text x="538" y="55">Verify</text><text class="s" x="538" y="73">ast + names</text>
+        <text x="692" y="55">Save</text><text class="s" x="692" y="73">output.py</text>
+        <path d="M132 57h28M288 57h28M444 57h28M600 57h28"/>
+        <path class="ah" d="M160 53l6 4-6 4zM316 53l6 4-6 4zM472 53l6 4-6 4zM628 53l6 4-6 4z"/>
+        <path d="M538 84v44H382V90"/><path class="ah" d="M378 92l4-8 4 8z"/>
+        <text class="s" x="460" y="148">syntax error: repair the line, then verify again</text>
+      </svg></div>
+      <ol class="steps">
+        <li><b>Extract names.</b> Every variable, function, class and parameter is listed so there is a fixed set to protect.</li>
+        <li><b>Translate.</b> Strings and comments are hidden first, so rules never touch them. Each construct is then rewritten as Python.</li>
+        <li><b>Verify.</b> Python's <code>ast</code> parses the result, then every JS name must still exist in it.</li>
+        <li><b>Repair.</b> A line that cannot be translated becomes <code>pass</code> with a TODO, so the file always runs.</li>
+      </ol>
+    </section>
+
+    <section id="rules">
+      <h2>Translation rules</h2>
+      <p class="sub">Syntax changes where Python requires it. Names never do.</p>
+      <div class="tw"><table>
+        <thead><tr><th>JavaScript</th><th>Python</th></tr></thead>
+        <tbody>
+          <tr><td><code>const total = 0;</code></td><td><code>total = 0</code></td></tr>
+          <tr><td><code>function calcTotal(a) {}</code></td><td><code>def calcTotal(a):</code></td></tr>
+          <tr><td><code>(a) =&gt; a + 1</code></td><td><code>lambda a: a + 1</code></td></tr>
+          <tr><td><code>for (const x of xs)</code></td><td><code>for x in xs:</code></td></tr>
+          <tr><td><code>for (let i = 0; i &lt; n; i++)</code></td><td><code>for i in range(0, n):</code></td></tr>
+          <tr><td><code>if / else if / else</code></td><td><code>if / elif / else</code></td></tr>
+          <tr><td><code>===  &amp;&amp;  ||  !x</code></td><td><code>==  and  or  not x</code></td></tr>
+          <tr><td><code>ok ? a : b</code></td><td><code>a if ok else b</code></td></tr>
+          <tr><td><code>`Hi ${userName}`</code></td><td><code>f"Hi {userName}"</code></td></tr>
+          <tr><td><code>item.price</code></td><td><code>item["price"]</code></td></tr>
+          <tr><td><code>list.push(x)</code></td><td><code>list.append(x)</code></td></tr>
+          <tr><td><code>console.log(x)</code></td><td><code>print(x)</code></td></tr>
+          <tr><td><code>class A { constructor() {} }</code></td><td><code>class A: def __init__(self):</code></td></tr>
+          <tr><td><code>throw new Error(m)</code></td><td><code>raise Exception(m)</code></td></tr>
+          <tr><td><code>try / catch (e)</code></td><td><code>try / except Exception as e:</code></td></tr>
+          <tr><td>Name is a Python keyword, such as <code>from</code></td><td><code>from_</code> (the only allowed rename)</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="testing">
+      <h2>Testing and limits</h2>
+      <p class="sub">What was checked, and what the agent does not do.</p>
+      <div class="cols">
+        <div class="box"><h3>Checked</h3><ul>
+          <li>Command-line and browser versions give identical output on 5 test files</li>
+          <li>Every output is parsed with Python's <code>ast</code></li>
+          <li>Each JS name must exist in the Python, or it is reported</li>
+          <li>Names inside strings and comments are ignored</li>
+          <li>Unsupported code gets a TODO instead of breaking the file</li>
+        </ul></div>
+        <div class="box"><h3>Not covered</h3><ul>
+          <li><code>switch</code>, <code>async/await</code> and DOM code</li>
+          <li>Destructuring, such as <code>const {a, b} = obj</code></li>
+          <li>Behavior: output is checked for syntax and names, not run against tests</li>
+          <li>Next step: a real JS parser and generated test cases</li>
+        </ul></div>
+      </div>
+    </section>
+
+    <section id="run">
+      <h2>Run it yourself</h2>
+      <p class="sub">Needs Python 3.8 or newer. No API key, no installs.</p>
+      <div class="box"><pre>git clone https://github.com/YOUR-USERNAME/YOUR-REPO
+cd YOUR-REPO
+python agent.py input.js</pre></div>
+    </section>
+
+    <section id="team">
+      <h2>Course project</h2>
+      <p>Agentic AI course, Sathyabama University. Submitted by Balakrishnan G (44110099) and Balamurugan (44110100).</p>
+    </section>
+  </main>
+  <footer>Code Translation Agent. Source code on <a href="https://github.com/YOUR-USERNAME/YOUR-REPO">GitHub</a>.</footer>
+</div>
+<script>
+/* In-browser port of agent.py's translator. Runs locally, nothing is uploaded. */
+const PY_KEYWORDS = ["False","None","True","and","as","assert","async","await","break","class","continue","def","del","elif","else","except","finally","for","from","global","if","import","in","is","lambda","nonlocal","not","or","pass","raise","return","try","while","with","yield"];
+const TOKEN = /\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`/g;
+const MATH = {floor:"math.floor",ceil:"math.ceil",sqrt:"math.sqrt",pow:"math.pow",PI:"math.pi",max:"max",min:"min",abs:"abs",round:"round",random:"random.random"};
+const METHODS = {push:"append",toUpperCase:"upper",toLowerCase:"lower",trim:"strip"};
+const NO_SUBSCRIPT = new Set(["self","math","random"]);
+const USED = new Set();
+
+function protect(js){
+  const strs=[], cmts=[];
+  const code = js.replace(TOKEN, t => {
+    if (t.startsWith("//") || t.startsWith("/*")) {
+      const text = t.startsWith("//") ? t.slice(2) : t.slice(2,-2);
+      cmts.push("# " + text.trim().split(/\s+/).join(" ").trim());
+      return "\x01"+(cmts.length-1)+"\x01";
+    }
+    if (t[0] === "`") {
+      const parts = t.slice(1,-1).split(/\$\{(.*?)\}/);
+      let f = "";
+      parts.forEach((p,i) => {
+        if (i % 2) f += "{" + expr(p).replace(/"/g,"'") + "}";
+        else f += p.replace(/\{/g,"{{").replace(/\}/g,"}}").replace(/"/g,'\\"');
+      });
+      strs.push('f"' + f + '"');
+    } else strs.push(t);
+    return "\x00"+(strs.length-1)+"\x00";
+  });
+  return [code, strs, cmts];
+}
+
+function extractNames(js){
+  const code = protect(js)[0];
+  const names = new Set();
+  const add = (re, g=1) => { for (const m of code.matchAll(re)) names.add(m[g]); };
+  add(/\b(?:const|let|var)\s+([A-Za-z_]\w*)/g);
+  add(/\b(?:function|class)\s+([A-Za-z_]\w*)/g);
+  const plist = [];
+  for (const m of code.matchAll(/\bfunction\s*\w*\s*\(([^)]*)\)/g)) plist.push(m[1]);
+  for (const m of code.matchAll(/\(([^()]*)\)\s*=>/g)) plist.push(m[1]);
+  for (const m of code.matchAll(/^\s*(?:static\s+)?([A-Za-z_]\w*)\s*\(([^)]*)\)\s*\{/gm)) {
+    if (["if","for","while","switch","catch","function"].includes(m[1])) continue;
+    if (m[1] !== "constructor") names.add(m[1]);
+    plist.push(m[2]);
+  }
+  for (const params of plist) for (const p of params.split(",")) {
+    const m = p.match(/^\s*(?:\.\.\.)?([A-Za-z_]\w*)/);
+    if (m) names.add(m[1]);
+  }
+  add(/\b([A-Za-z_]\w*)\s*=>/g);
+  add(/\bfor\s*\(\s*(?:const|let|var)\s+([A-Za-z_]\w*)/g);
+  return names;
+}
+
+function expr(s, literal=false){
+  s = s.replace(/\bnew\s+(?=[A-Z])/g, "");
+  s = s.split("===").join("==").split("!==").join("!=").split("&&").join(" and ").split("||").join(" or ");
+  s = s.replace(/!(?!=)/g, " not ");
+  for (const [js,py] of [["true","True"],["false","False"],["null","None"],["undefined","None"],["this","self"]])
+    s = s.replace(new RegExp("\\b"+js+"\\b","g"), py);
+  s = s.split("console.log(").join("print(");
+  s = s.replace(/\bMath\.(\w+)/g, (m0,k) => {
+    if (!(k in MATH)) return m0;
+    const py = MATH[k];
+    USED.add(py.startsWith("math") ? "math" : py.includes("random") ? "random" : "");
+    return py;
+  });
+  for (const [js,py] of Object.entries(METHODS)) s = s.replace(new RegExp("\\."+js+"\\(","g"), "."+py+"(");
+  s = s.replace(/([A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[[^\]]*\])*)\.length\b/g, "len($1)");
+  s = s.replace(/(?<![\w.\]\)"])([A-Za-z_]\w*)((?:\.[A-Za-z_]\w*)+)(\s*\()?/g, (m0, base, propsStr, call) => {
+    if (NO_SUBSCRIPT.has(base)) return m0;
+    const props = propsStr.split(".").slice(1);
+    const keep = call ? props.pop() : null;
+    return base + props.map(p => '["'+p+'"]').join("") + (keep ? "."+keep+call : "");
+  });
+  let prev = null;
+  while (prev !== s) { prev = s; s = s.replace(/(\])\.([A-Za-z_]\w*)(?![\w(])/g, '$1["$2"]'); }
+  if (literal || s.includes("{")) {
+    s = literal ? s.replace(/(^\s*|[{,]\s*)([A-Za-z_]\w*)\s*:(?!:)/g, '$1"$2":')
+                : s.replace(/([{,]\s*)([A-Za-z_]\w*)\s*:(?!:)/g, '$1"$2":');
+  }
+  if (s.includes("?")) {
+    const m = s.match(/^((?:return|[\w.\[\]"]+\s*[+\-*/]?=(?!=))\s*)?(.+?)\s*\?\s*(.+?)\s*:\s*(.+)$/);
+    if (m) s = (m[1]||"") + m[3] + " if " + m[2] + " else " + m[4];
+  }
+  return s.includes("\x00") ? s.trim() : s.replace(/\s+/g," ").trim();
+}
+
+const params = p => p.replace(/\.\.\.(\w+)/g,"*$1").trim();
+
+function forHeader(h){
+  let m = h.match(/^for\s*\((?:const|let|var)?\s*(\w+)\s+(of|in)\s+(.+)\)$/);
+  if (m) return "for "+m[1]+" in "+expr(m[3])+":";
+  m = h.match(/^for\s*\((?:let|const|var)?\s*(\w+)\s*=\s*(.+?);\s*\1\s*(<=|<|>=|>)\s*(.+?);\s*(.+)\)$/);
+  if (!m) return null;
+  const [, v, start0, op, end0, upd] = m;
+  let step;
+  if (new RegExp("^(?:"+v+"\\s*(\\+\\+|--)|(\\+\\+|--)\\s*"+v+")$").test(upd)) step = upd.includes("+") ? "1" : "-1";
+  else {
+    const u = upd.match(new RegExp("^"+v+"\\s*([+-])=\\s*(\\S+)$"));
+    if (!u) return null;
+    step = u[1] === "+" ? u[2] : "-"+u[2];
+  }
+  let end = expr(end0); const start = expr(start0);
+  if (op === "<=" || op === ">=") {
+    const d = op === "<=" ? 1 : -1;
+    end = /^-?\d+$/.test(end) ? String(parseInt(end,10)+d) : end+" "+(d>0?"+":"-")+" 1";
+  }
+  const args = [start, end].concat(step === "1" ? [] : [step]);
+  return "for "+v+" in range("+args.join(", ")+"):";
+}
+
+function header(h, inClass){
+  let m = h.match(/^(?:async\s+)?function\s+(\w+)\s*\((.*)\)$/);
+  if (m) return ["def "+m[1]+"("+params(m[2])+"):","block"];
+  m = h.match(/^(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:function\s*\((.*)\)|\((.*)\)\s*=>|(\w+)\s*=>)$/);
+  if (m) return ["def "+m[1]+"("+params(m[2]||m[3]||m[4]||"")+"):","block"];
+  m = h.match(/^class\s+(\w+)(?:\s+extends\s+(\w+))?$/);
+  if (m) return ["class "+m[1]+(m[2]?"("+m[2]+")":"")+":","class"];
+  m = h.match(/^if\s*\((.*)\)$/);
+  if (m) return ["if "+expr(m[1])+":","block"];
+  m = h.match(/^else\s+if\s*\((.*)\)$/);
+  if (m) return ["elif "+expr(m[1])+":","block"];
+  if (h === "else") return ["else:","block"];
+  m = h.match(/^while\s*\((.*)\)$/);
+  if (m) return ["while "+expr(m[1])+":","block"];
+  if (h.startsWith("for")) { const f = forHeader(h); return f ? [f,"block"] : null; }
+  if (h === "try") return ["try:","block"];
+  if (h === "finally") return ["finally:","block"];
+  m = h.match(/^catch\s*(?:\((\w+)\))?$/);
+  if (m) return [m[1] ? "except Exception as "+m[1]+":" : "except Exception:","block"];
+  if (inClass) {
+    m = h.match(/^(?:static\s+)?(\w+)\s*\((.*)\)$/);
+    if (m && !["if","for","while","switch","catch"].includes(m[1])) {
+      const name = m[1] === "constructor" ? "__init__" : m[1];
+      const p = params(m[2]);
+      return ["def "+name+"("+(p ? "self, "+p : "self")+"):","block"];
+    }
+  }
+  return null;
+}
+
+function statement(s){
+  s = s.replace(/^(?:const|let|var)\s+/, "");
+  let m = s.match(/^(\S+?)\s*(\+\+|--)$/);
+  if (m) return m[1]+" "+m[2][0]+"= 1";
+  m = s.match(/^throw\s+(.*)$/);
+  if (m) return "raise " + expr(m[1]).replace("Error(", "Exception(");
+  m = s.match(/^(\w+)\s*=\s*(?:\((.*?)\)|(\w+))\s*=>\s*([^{].*)$/);
+  if (m) return m[1]+" = lambda "+params(m[2]||m[3]||"")+": "+expr(m[4]);
+  return expr(s);
+}
+
+function translate(js, names){
+  USED.clear();
+  let [code, strs, cmts] = protect(js);
+  for (const n of names) if (PY_KEYWORDS.includes(n)) code = code.replace(new RegExp("\\b"+n+"\\b","g"), n+"_");
+  const out = [], stack = [];
+  let ind = 0;
+  for (const raw of code.split("\n")) {
+    let s = raw.trim(), cm = "";
+    const m = s.match(/\s*(\x01\d+\x01)\s*$/);
+    if (m) { cm = "  "+m[1]; s = s.slice(0, m.index).trim(); }
+    s = s.replace(/;+$/,"").trim();
+    const pad = () => "    ".repeat(ind + stack.filter(x => x === "literal").length);
+    if (!s) { out.push(cm ? pad()+cm.trim() : ""); continue; }
+    if (s.startsWith("}")) {
+      const kind = stack.length ? stack.pop() : "block";
+      if (kind === "literal") { out.push(pad()+expr(s,true)+cm); continue; }
+      ind = Math.max(0, ind-1);
+      s = s.slice(1).trim().replace(/;+$/,"").trim();
+      if (!s) { if (cm) out.push(pad()+cm.trim()); continue; }
+    }
+    const em = s.match(/^(.*?)\s*\{\s*\}$/);
+    if (em && header(em[1].trim(), false)) {
+      out.push(pad()+header(em[1].trim(), false)[0]+cm);
+      out.push(pad()+"    pass");
+      continue;
+    }
+    if (s.endsWith("{")) {
+      const before = s.slice(0,-1).trim();
+      const h = header(before, stack.length > 0 && stack[stack.length-1] === "class");
+      if (h) { out.push(pad()+h[0]+cm); stack.push(h[1]); ind++; }
+      else if (before === "" || /(=|\(|,|:|\[|return|=>)$/.test(before)) { out.push(pad()+statement(s)+cm); stack.push("literal"); }
+      else { out.push(pad()+"if True:  # TODO could not translate: "+before); stack.push("block"); ind++; }
+      continue;
+    }
+    const inLit = stack.length > 0 && stack[stack.length-1] === "literal";
+    out.push(pad() + (inLit ? expr(s,true) : statement(s)) + cm);
+  }
+  let py = out.join("\n");
+  py = py.replace(/\x00(\d+)\x00/g, (_,i) => strs[+i]).replace(/\x01(\d+)\x01/g, (_,i) => cmts[+i]);
+  const imports = [...USED].filter(Boolean).sort().map(u => "import "+u+"\n").join("");
+  return (imports ? imports+"\n" : "") + py.trim() + "\n";
+}
+
+function verify(py, names){
+  const problems = [];
+  const stack = [], pairs = {")":"(","]":"[","}":"{"};
+  const bare = py.replace(/f?"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|#[^\n]*/g, '""');
+  for (const ch of bare) {
+    if ("([{".includes(ch)) stack.push(ch);
+    else if (")]}".includes(ch) && stack.pop() !== pairs[ch]) { problems.push("Brackets do not match."); break; }
+  }
+  if (stack.length && !problems.length) problems.push("Brackets do not match.");
+  const missing = [];
+  for (const n of [...names].sort()) {
+    const want = PY_KEYWORDS.includes(n) ? n+"_" : n;
+    if (!new RegExp("(^|[^\\w])"+want+"(?![\\w])").test(bare)) missing.push(want);
+  }
+  missing.forEach(n => problems.push("Name '"+n+"' is missing or was renamed."));
+  return problems;
+}
+
+
+const EXAMPLES = [
+`const taxRate = 0.18;
+
+function calcTotal(cartItems) {
+  let totalPrice = 0;
+  for (const item of cartItems) {
+    totalPrice += item.price * item.qty;
+  }
+  return totalPrice * (1 + taxRate);
+}
+`,
+`class BankAccount {
+  constructor(ownerName, startBalance) {
+    this.ownerName = ownerName;
+    this.currentBalance = startBalance;
+  }
+  deposit(amountValue) {
+    if (amountValue <= 0) {
+      throw new Error("Invalid amount");
+    }
+    this.currentBalance += amountValue;
+    return this.currentBalance;
+  }
+}
+const myAccount = new BankAccount("Ravi", 500);
+console.log(myAccount.deposit(250));
+`,
+`function fizzBuzz(limitValue) {
+  for (let counter = 1; counter <= limitValue; counter++) {
+    if (counter % 15 === 0) {
+      console.log("FizzBuzz");
+    } else if (counter % 3 === 0) {
+      console.log("Fizz");
+    } else {
+      console.log(counter);
+    }
+  }
+}
+fizzBuzz(15);
+`];
+
+(function(){
+  const $ = id => document.getElementById(id);
+  const src = $("src"), out = $("out"), log = $("log"), chips = $("chips");
+  let current = "";
+  const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  function setOn(name, on){
+    document.querySelectorAll("[data-id]").forEach(function(el){ if (el.dataset.id === name) el.classList.toggle("on", on); });
+  }
+  function wire(el){
+    el.addEventListener("mouseenter", function(){ setOn(el.dataset.id, true); });
+    el.addEventListener("mouseleave", function(){ setOn(el.dataset.id, false); });
+  }
+
+  function render(){
+    const js = src.value;
+    log.innerHTML = ""; chips.innerHTML = ""; current = "";
+    if (!js.trim()) {
+      out.innerHTML = '<span class="empty">Paste JavaScript on the left, pick an example, or open a .js file.</span>';
+      return;
+    }
+    let names, py, problems;
+    try {
+      names = extractNames(js); py = translate(js, names); problems = verify(py, names);
+    } catch (e) {
+      out.textContent = "";
+      log.innerHTML = '<li class="bad">The translator hit an error: ' + esc(String(e.message)) + '</li>';
+      return;
+    }
+    current = py;
+    const want = {};
+    [...names].sort().forEach(function(n){ want[PY_KEYWORDS.includes(n) ? n + "_" : n] = n; });
+    const keys = Object.keys(want).sort(function(a,b){ return b.length - a.length; });
+    let html = esc(py);
+    if (keys.length) {
+      html = html.replace(new RegExp("(^|[^\\w])(" + keys.join("|") + ")(?![\\w])", "g"), function(m, pre, k){
+        return pre + '<span class="id" data-id="' + want[k] + '">' + k + '</span>';
+      });
+    }
+    out.innerHTML = html;
+    out.querySelectorAll(".id").forEach(wire);
+
+    const lines = js.split("\n").length - (js.endsWith("\n") ? 1 : 0);
+    const todo = (py.match(/TODO could not translate/g) || []).length;
+    const items = [
+      "Read " + lines + " line" + (lines === 1 ? "" : "s"),
+      "Found " + names.size + " name" + (names.size === 1 ? "" : "s") + " to keep",
+      "Translated with rules",
+      problems.length ? "Check found " + problems.length + " problem" + (problems.length === 1 ? "" : "s") : "Check passed: all names kept"
+    ];
+    items.forEach(function(t, i){
+      const li = document.createElement("li");
+      li.textContent = (i + 1) + ". " + t;
+      log.appendChild(li);
+    });
+    problems.forEach(function(p){
+      const li = document.createElement("li"); li.className = "bad"; li.textContent = p; log.appendChild(li);
+    });
+    if (todo) {
+      const li = document.createElement("li");
+      li.textContent = "5. " + todo + " line" + (todo === 1 ? "" : "s") + " need manual work (search for TODO)";
+      log.appendChild(li);
+    }
+    const missing = new Set(problems.filter(function(p){ return p.indexOf("Name '") === 0; }).map(function(p){ return p.split("'")[1]; }));
+    Object.keys(want).forEach(function(k){
+      const li = document.createElement("li");
+      const bad = missing.has(k);
+      li.className = "chip" + (bad ? " miss" : "");
+      li.dataset.id = want[k];
+      li.textContent = (bad ? "\u2717 " : "\u2713 ") + k;
+      wire(li);
+      chips.appendChild(li);
+    });
+    if (!names.size) chips.innerHTML = '<li class="empty">No names found in this code.</li>';
+  }
+
+  src.addEventListener("input", render);
+  $("example").addEventListener("change", function(e){ src.value = EXAMPLES[+e.target.value]; render(); });
+  $("clear").addEventListener("click", function(){ src.value = ""; render(); src.focus(); });
+  $("file").addEventListener("change", function(e){
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = function(){ src.value = String(r.result); render(); };
+    r.readAsText(f);
+  });
+  $("filebtn").addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
+  $("copy").addEventListener("click", function(){
+    const b = $("copy");
+    if (!current) return;
+    (navigator.clipboard ? navigator.clipboard.writeText(current) : Promise.reject()).then(function(){
+      b.textContent = "Copied"; setTimeout(function(){ b.textContent = "Copy"; }, 1500);
+    }).catch(function(){
+      const r = document.createRange(); r.selectNodeContents(out);
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      b.textContent = "Selected"; setTimeout(function(){ b.textContent = "Copy"; }, 1500);
+    });
+  });
+  $("dl").addEventListener("click", function(){
+    if (!current) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([current], {type: "text/x-python"}));
+    a.download = "output.py"; document.body.appendChild(a); a.click(); a.remove();
+  });
+  src.value = EXAMPLES[0];
+  render();
+})();
+</script>
+</body>
+</html>
